@@ -414,9 +414,23 @@ class Evaluation:
 
             sorted_df = pd.merge(combined_df, kwid_regid_map, on=['KWID'])
             sorted_df.rename(columns={'ZENR':'PKTNR'},inplace=True)
-            for year in range(2023,2050):
-                market_price_df = pd.read_excel(os.path.join(self.folder_path + f'/{self.weather_year}/hourly_prices_for_year_{year}_wy_{self.weather_year}.xlsx'))
-                sorted_df = pd.merge(sorted_df, market_price_df[['REGID','PKTNR','JAHR','FINAL_MARKTPREIS']], on=['REGID','PKTNR','JAHR'],how='left')
+            market_price_data = []
+            for year in range(2023, 2051):
+                # Read the market price data for the given year
+                temp_df = pd.read_excel(os.path.join(
+                    self.folder_path, f'{self.weather_year}/hourly_prices_for_year_{year}_wy_{self.weather_year}.xlsx'
+                ))
+
+                # Append to the list
+                market_price_data.append(temp_df)
+
+            # Concatenate all data into a single DataFrame
+            market_price_all_df = pd.concat(market_price_data, ignore_index=True)
+
+            # Convert 'JAHR' to integer (important for merging)
+            market_price_all_df['JAHR'] = market_price_all_df['JAHR'].astype(int)
+            sorted_df = sorted_df.merge(market_price_all_df, on=['REGID', 'PKTNR', 'JAHR'], how='left')
+
 
             sorted_df['Deckungsbeitrag_hr'] = (sorted_df['FINAL_MARKTPREIS'] + sorted_df['VARKOSTEN']) * sorted_df[
                 'EINSATZ']
@@ -424,7 +438,7 @@ class Evaluation:
             result_list = []
             for (year, kwid), group in sorted_df.groupby(['JAHR', 'KWID']):
                 average_profit = group['Deckungsbeitrag_hr'].sum() / group['PINSTALL'].mean()
-                result_list.append({'JAHR': year, 'KWID': kwid, 'Average_Profit': average_profit})
+                result_list.append({'JAHR': year, 'KWID': kwid, 'Annual_Profit': average_profit})
 
             # Create the result DataFrame
             result_df = pd.DataFrame(result_list)
@@ -434,10 +448,10 @@ class Evaluation:
                     average_profit = group['Deckungsbeitrag_hr'].sum() / group['PINSTALL'].mean()
                 else:
                     average_profit = 'PINSTALL = 0'  # Mark the issue for the entry
-                result_list.append({'JAHR': year, 'KWID': kwid, 'Average_Profit': average_profit})
+                result_list.append({'JAHR': year, 'KWID': kwid, 'Annual_Profit': average_profit})
 
             result_df = pd.DataFrame(result_list)
-            result_df['Kraftwerk'] = sorted_df['KWID'].map(kw_dict)
+            result_df['Kraftwerk'] = result_df['KWID'].map(kw_dict)
             output_path = os.path.join(
                 self.folder_path,
                 f"{self.weather_year}/kw_profitability/kw_profitability_{self.weather_year}.xlsx"
